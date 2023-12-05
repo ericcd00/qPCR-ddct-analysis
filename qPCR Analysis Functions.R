@@ -1,109 +1,6 @@
 ################################################################################
-## Title: qPCR Analysis script
+## Title: qPCR Analysis Functions
 ## Creator: Eric Canton Dominguez
-################################################################################
-
-## This scrip uses 3 main functions: read_pdf, ddct_analysis and ddct_plot. 
-## There is also the complete_ddct_analysis function, that combines the 3 functions above
-
-# 1. Read_pdf: Use the read_pdf function to extract the qPCR data from a pdf 
-# file and export it to a .xslx file.
-# 2. ddct_analysis: Use the ddct_analysis function to quicklyperformthe ddct
-# method from an excel file or the result from the pdf read by the read_pdf function
-# 3. ddct_plot: Use the ddct_plot to generate a plot comparing the values of 
-# the different conditions
-
-# To use this function it is required to have Java 6 and JDK previously 
-# installed. 
-
-################################################################################
-################################ INSTRUCTIONS ##################################
-################################################################################
-
-### This is the only section the user must fill ###
-
-# Name of the experiment (This will be used to name the files).
-# exp_name <- "Name_of_the_experiment"
-exp_name <- "Exp010102"
-
-# Path where the results will be stored
-# result_path <- "path_to_store_results"
-result_path = "~/Downloads/qPCR_data/Results"
-
-# Housekeeping genes
-# housekeeping_genes = c("ACTB", "...",...)
-housekeeping_genes = c("ACTB")
-
-# Number of wells used for each gene
-# wells = number of wells (15)
-wells = 15
-
-# Names of all the conditions ("Groups") of the analysis
-# analized_groups = c("UNT", "CAF", "...",...)
-analized_groups = c("UNT", "CAF")
-
-
-# (Only needed if you will use the read_pdf function)
-# Path of the LightCycler 480 PDF Report 
-# pdf_path <- "path_of_the_file"
-pdf_path <- "~/Downloads/qPCR_data/qPCR_RawData_LauraS.pdf"
-
-
-# (Only needed if you will use the ddct_analysis function)
-# Variable used as the control variable for the ddct analysis 
-# control_variable = "UNT"
-control_variable = "UNT"
-
-
-# (Only needed if you will use the ddct_plot function)
-# Genes wanted to be plotted 
-# Genes_of_interest = c("NNMT1", "SERPINE1", "SNAI2", "THBS1")
-Genes_of_interest = c("NNMT1", "SERPINE1", "SNAI2", "THBS1")
-
-# (Only needed if you will use the ddct_plot function)
-# Title of the plot generated
-# title = "Title"
-title = "Barplot comparativo ddct"
-
-
-################################################################################
-########################## 1. Install all Packages #############################
-################################################################################
-
-# All the packages must be installed prior to the execution of the function.
-
-if(!require(tabulizer)){
-  devtools::install_github("ropensci/tabulizer")
-  library(tabulizer) # Extract the tables from the pdf file 
-}
-
-if(!require(pdftools)){
-  install.packages("pdftools")
-  library(pdftools) # Extract the text from the pdf file 
-}
-
-if(!require(stringr)){
-  install.packages("stringr")
-  library(stringr) # Recognize patterns
-}
-
-if(!require(openxlsx)){
-  install.packages("openxlsx")
-  library(openxlsx) # Save the results in an excel file
-}
-
-if(!require(dplyr)){
-  install.packages("dplyr")
-  library(dplyr)
-}
-
-if(!require(ggplot2)){
-  install.packages("ggplot2")
-  library(ggplot2)
-}
-
-################################################################################
-################################## Function ####################################
 ################################################################################
 
 read_pdf <- function(pdf_path,
@@ -308,6 +205,17 @@ read_pdf <- function(pdf_path,
   
 }
 
+read_excel <- function(Excel_path) { 
+  
+  sheets <- readxl::excel_sheets(Excel_path) 
+  tibble <- lapply(sheets, function(x) readxl::read_excel(Excel_path, sheet = x)) 
+  data_frame <- lapply(tibble, as.data.frame) 
+  
+  names(data_frame) <- sheets 
+  
+  return(data_frame)
+} 
+
 
 ddct_analysis <- function(data,
                           result_path,
@@ -373,11 +281,21 @@ ddct_analysis <- function(data,
   })
   
   final <- lapply(results, function(df){
-    merged_df <- aggregate(ddct ~ Group, df, mean)
-    sd <- aggregate(ddct ~ Group, df, sd)
+    
+    frecuencias <- table(df$Name)
+    
+    merged_df <- aggregate(ddct ~ Name, df, FUN=mean) # En vez de Group, Name!
+    
+    sd <- aggregate(ddct ~ Name, df, FUN = "sd")
+    
     merged_df$sd <- sd$ddct
+    
+    
     merged_df$ddct <- round(merged_df$ddct, 2)
     merged_df$sd <- round(merged_df$sd, 2)
+    
+    merged_df$sd[merged_df$Name %in% names(frecuencias[frecuencias < 3])] <- NA
+    
     return(merged_df)
     
   })
@@ -390,6 +308,7 @@ ddct_analysis <- function(data,
              headerStyle = hs,
              rowNames = FALSE)
   
+  
   return(final)
 }
 
@@ -398,47 +317,69 @@ ddct_plot <- function(data,
                       ddct_values, 
                       Genes_of_interest, 
                       title,
-                      result_path){
+                      result_path) {
   
-  datos <-  lapply(data, function(df) {
-    df[, c("Group", "CP"), drop = FALSE]
+  
+  df_combined <- bind_rows(ddct_values, .id = "Gene")
+  df_filtrado <- df_combined %>% filter(Gene %in% Genes_of_interest)
+  
+  df_filtrado$Group <- apply(df_filtrado, 1, function(row) {
+    str_extract(row["Name"], paste(analized_groups, collapse = "|"))
   })
-  datos <- bind_rows(datos, .id = "ID")
-  datos <- datos %>% filter(ID %in% Genes_of_interest)
   
-  df_combined <- bind_rows(ddct_values, .id = "ID")
+  res <- aggregate(ddct ~ Group + Gene, data = df_filtrado, mean)
+  res <- res%>% select (Gene, Group, ddct)
   
-  df_filtrado <- df_combined %>% filter(ID %in% Genes_of_interest)
+  sd <- aggregate(ddct ~ Group + Gene, data = df_filtrado, FUN = "sd")
+  res$sd <- sd$ddct
   
-  plot <- ggplot(df_filtrado, aes(x = ID, y=ddct, fill=Group)) + 
-    geom_bar(stat="identity", position = position_dodge(.6), 
-             width = .4) +
+  
+  frecuencias <- table(df_filtrado$Gene, df_filtrado$Group)
+  
+  freq_values <- all(frecuencias >= 3)
+  
+  df_filtrado$Gene <- factor(df_filtrado$Gene, levels = Genes_of_interest)
+  df_filtrado$Group <- factor(df_filtrado$Group, levels = analized_groups)
+  
+  
+  plot <- ggplot(res, aes(x = Gene, y=ddct, fill=Group)) + 
     
-    geom_errorbar(aes(ymin = ddct - sd, ymax = ddct + sd), 
-                  position = position_dodge(.6), width = .2) +
-    
-    ## geom_point(data = datos, aes(ID, CP), position = position_dodge(.6)) +
+    geom_point(data = df_filtrado, aes(shape=Group, color=Group), size = 2, position = position_dodge(.6)) +
+    scale_colour_grey(start = .2, end = .2) +
     
     ggtitle(title) +
     xlab("") +
     ylab("Relative mRNA levels") +
-    scale_fill_grey(start = .1, end = .5) +
     
-    scale_y_continuous(expand = c(0, 0)) +
+    scale_y_continuous(expand = expansion(mult = c(0, .05))) +
     
     geom_hline(yintercept=0) +
-    theme_bw() + 
     
-    theme(plot.title = element_text(hjust = 0.5),
+    theme_bw() +
+    theme(plot.title = element_text(hjust = .5, vjust = 0.6, face = "bold", size = "20"),
           panel.border = element_blank(),
           panel.grid.major = element_blank(),
           panel.grid.minor = element_blank(),
           legend.title = element_blank(),
           axis.title.y = element_text(face="bold"),
           axis.line = element_line(colour = "black", linewidth = 1),
-          axis.text.x = element_text(face="bold", size=12, angle=45, 
+          axis.text.x = element_text(face="bold", size=14, angle=45, 
                                      vjust = 0.6, colour="Black"),
-          axis.text.y = element_text(face="bold", size="12"))
+          axis.text.y = element_text(colour = "black", face="bold", size=14))
+  
+  if (freq_values) {
+    plot <- plot + geom_bar(stat="identity", position = position_dodge(.6), 
+                            width = .5) +
+      scale_fill_grey(start = .1, end = .5) +
+      geom_errorbar(aes(ymin = ddct - sd, ymax = ddct + sd), 
+                    position = position_dodge(.6), width = .2)
+    
+    compare_means(ddct ~ Group, data = res, group.by="Gene", method = "t.test")
+    
+    plot <- plot + stat_compare_means(aes(x = Gene, y = ddct), data = res, 
+                                      method = "t.test", label = "p.signif")
+  }
+  
   
   print(plot)
   
@@ -447,6 +388,7 @@ ddct_plot <- function(data,
          device = pdf,
          path=result_path)          
   
+  return(plot)
 }
 
 
@@ -454,7 +396,7 @@ complete_ddct_analysis <- function() {
   
   Results <- read_pdf(pdf_path = pdf_path, 
                       result_path = result_path, 
-                      exp_name = exp_name, 
+                      exp_name= exp_name, 
                       wells = wells, 
                       analized_groups = analized_groups, 
                       housekeeping_genes = housekeeping_genes)
@@ -480,31 +422,3 @@ complete_ddct_analysis <- function() {
   
 }
 
-
-################################################################################
-############################## Execute function ################################
-################################################################################
-
-Results <- read_pdf(pdf_path = pdf_path, 
-                    result_path = result_path, 
-                    exp_name = exp_name, 
-                    wells = wells, 
-                    analized_groups = analized_groups, 
-                    housekeeping_genes = housekeeping_genes)
-
-
-ddct_results <- ddct_analysis(data = Results,
-                              result_path = result_path, 
-                              exp_name = exp_name, 
-                              housekeeping_genes = housekeeping_genes,
-                              control_variable = control_variable)
-
-
-plotting <- ddct_plot(data = Results,
-                      ddct_values = ddct_results,
-                      Genes_of_interest = Genes_of_interest,
-                      title = title,
-                      result_path = result_path)
-
-
-complete_ddct_analysis <- complete_ddct_analysis()
