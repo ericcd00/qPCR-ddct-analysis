@@ -319,6 +319,33 @@ ddct_plot <- function(data,
                       title,
                       result_path) {
   
+  ################################################################################
+  ################################ Sanity Checks #################################
+  ################################################################################
+  
+  # Sanity check 1: Paths
+  if (!file.exists(result_path)) {
+    stop("This path doesn't exist")
+  }
+  
+  # Sanity check 2: Mandatory parameters
+  if (missing(data) || missing(ddct_values) || missing(Genes_of_interest) ||
+      missing(title) || missing(result_path)) {
+    stop("There are missing parameters. Check if all the parameters are filled.")
+  }
+  
+  # Sanity check 3: Parameter values
+  if (!is.character(Genes_of_interest) || length(Genes_of_interest) == 0) {
+    stop("The parameter *Genes_of_interest* must be a string vector.")
+  }
+  
+  if (!is.character(title)) {
+    stop("The parameter *title* must be a string vector.")
+  }
+  
+  ################################################################################
+  #################################### Code ######################################
+  ################################################################################
   
   df_combined <- bind_rows(ddct_values, .id = "Gene")
   df_filtrado <- df_combined %>% filter(Gene %in% Genes_of_interest)
