@@ -216,7 +216,6 @@ read_excel <- function(Excel_path) {
   return(data_frame)
 } 
 
-
 ddct_analysis <- function(data,
                           result_path,
                           exp_name,
