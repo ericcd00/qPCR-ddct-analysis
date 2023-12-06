@@ -140,10 +140,10 @@ read_pdf <- function(pdf_path,
     df <- cbind(df, Well = pos_well)
     
     # Column with the groups submitted by the user ( mirar which() )
-    df$Group <- apply(df, 1, function(row) {
-      matching_group <- analized_groups[str_detect(row["Name"], analized_groups)]
+    df$Group <- sapply(df$Name, function(name) {
+      matching_group <- which(str_detect(name, analized_groups))
       if (length(matching_group) > 0) {
-        return(matching_group)
+        return(analized_groups[matching_group[1]])
       } else {
         return("No match")
       }
@@ -255,14 +255,18 @@ ddct_analysis <- function(data,
   ################################################################################
   
   
-  sample_means <- lapply(data, function(df) {
+  sample_means <- lapply(Results, function(df) {
     means <- aggregate(CP ~ Name, df, mean)
     return(means)
   })
   
-  results <- lapply(data, function(df) {
+  sample_means <-  sample_means[housekeeping_genes]
+  hk_combined <- bind_rows(sample_means, .id = "Gene")
+  hk_combined <- aggregate(CP ~ Name, hk_combined, mean)
+  
+  results <- lapply(Results, function(df) {
     
-    merged_df <- merge(df, sample_means[[housekeeping_genes]], by = "Name", all.x = TRUE)
+    merged_df <- merge(df, hk_combined, by = "Name", all.x = TRUE)
     names(merged_df)[names(merged_df) == 'CP.x'] <- 'CP'
     names(merged_df)[names(merged_df) == 'CP.y'] <- 'CP.HK'
     
@@ -283,7 +287,7 @@ ddct_analysis <- function(data,
     
     frecuencias <- table(df$Name)
     
-    merged_df <- aggregate(ddct ~ Name, df, FUN=mean) # En vez de Group, Name!
+    merged_df <- aggregate(ddct ~ Name, df, FUN=mean) 
     
     sd <- aggregate(ddct ~ Name, df, FUN = "sd")
     
@@ -295,9 +299,13 @@ ddct_analysis <- function(data,
     
     merged_df$sd[merged_df$Name %in% names(frecuencias[frecuencias < 3])] <- NA
     
+    
+    
     return(merged_df)
     
   })
+  
+  final <- final[!(names(final) %in% housekeeping_genes)]
   
   hs <- createStyle(textDecoration = "BOLD", fontColour = "white", fontSize = 14, 
                     fontName = "Arial Narrow", fgFill = "turquoise4")
@@ -316,7 +324,8 @@ ddct_plot <- function(data,
                       ddct_values, 
                       Genes_of_interest, 
                       title,
-                      result_path) {
+                      result_path,
+                      Groups_of_interest) {
   
   ################################################################################
   ################################ Sanity Checks #################################
@@ -346,7 +355,7 @@ ddct_plot <- function(data,
   #################################### Code ######################################
   ################################################################################
   
-  df_combined <- bind_rows(ddct_values, .id = "Gene")
+  df_combined <- bind_rows(ddct_results, .id = "Gene")
   df_filtrado <- df_combined %>% filter(Gene %in% Genes_of_interest)
   
   df_filtrado$Group <- apply(df_filtrado, 1, function(row) {
@@ -365,7 +374,7 @@ ddct_plot <- function(data,
   freq_values <- all(frecuencias >= 3)
   
   df_filtrado$Gene <- factor(df_filtrado$Gene, levels = Genes_of_interest)
-  df_filtrado$Group <- factor(df_filtrado$Group, levels = analized_groups)
+  df_filtrado$Group <- factor(df_filtrado$Group, levels = Groups_of_interest)
   
   
   plot <- ggplot(res, aes(x = Gene, y=ddct, fill=Group)) + 

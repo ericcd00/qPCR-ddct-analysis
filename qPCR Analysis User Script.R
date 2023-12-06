@@ -24,7 +24,7 @@
 
 # Name of the experiment (This will be used to name the files).
 # exp_name <- "Name_of_the_experiment"
-exp_name <- "Exp010102"
+exp_name <- "2023-01-20"
 
 # Path where the results will be stored
 # result_path <- "path_to_store_results"
@@ -32,15 +32,18 @@ result_path = "~/Downloads/qPCR_data/Results"
 
 # Housekeeping genes
 # housekeeping_genes = c("ACTB", "...",...)
-housekeeping_genes = c("ACTB")
+housekeeping_genes = c("ACTB", "HPRT1")
 
 # Number of wells used for each gene
 # wells = number of wells (15)
-wells = 15
+wells = 21
 
 # Names of all the conditions ("Groups") of the analysis
+# If one group contains another ("SPP1" and "SPP12") put the longest one first.
+# If there are special characters in a group ("SPP1+EPZ) put "\\" before the 
+# special character ("SPP1\\+EPZ")
 # analized_groups = c("UNT", "CAF", "...",...)
-analized_groups = c("UNT", "CAF")
+analized_groups = c("CT", "SPP1\\+EPZ", "SPP1") #Hacer pruebas con "\\"
 
 # (Only needed if you *won't*  use the read_pdf function)
 # qPCR excel file
@@ -50,19 +53,24 @@ Excel_path = "~/Downloads/qPCR_data/Exp010102_qPCR_data.xlsx"
 # (Only needed if you will use the read_pdf function)
 # Path of the LightCycler 480 PDF Report 
 # pdf_path <- "path_of_the_file"
-pdf_path <- "~/Downloads/qPCR_data/qPCR_RawData_LauraS.pdf"
+pdf_path <- "~/Downloads/qPCR_data/2023-01-20 Laura S.pdf"
 
 
 # (Only needed if you will use the ddct_analysis function)
 # Variable used as the control variable for the ddct analysis 
 # control_variable = "UNT"
-control_variable = "UNT"
+control_variable = "CT"
 
 
 # (Only needed if you will use the ddct_plot function)
 # Genes wanted to be plotted 
 # Genes_of_interest = c("NNMT1", "SERPINE1", "SNAI2", "THBS1")
-Genes_of_interest = c("SNAI2", "SERPINE1", "NNMT1", "THBS1")
+Genes_of_interest = c("TSPAN4", "TPM2")
+
+# Names of all the conditions ("Groups") to plot
+# Groups_of_interest = c("UNT", "CAF", "...",...)
+Groups_of_interest = c("CT", "SPP1", "SPP1+EPZ")
+
 
 # (Only needed if you will use the ddct_plot function)
 # Title of the plot generated
@@ -146,7 +154,8 @@ plot_result <- ddct_plot(data = Results,
                       ddct_values = ddct_results,
                       Genes_of_interest = Genes_of_interest,
                       title = title,
-                      result_path = result_path)
+                      result_path = result_path,
+                      Groups_of_interest = Groups_of_interest)
 
 # Perform all functions at one from the pdf file 
 complete_ddct_analysis <- complete_ddct_analysis()
