@@ -325,7 +325,8 @@ ddct_plot <- function(data,
                       Genes_of_interest, 
                       title,
                       result_path,
-                      Groups_of_interest) {
+                      Groups_of_interest,
+                      exp_name) {
   
   ################################################################################
   ################################ Sanity Checks #################################
@@ -362,6 +363,8 @@ ddct_plot <- function(data,
     str_extract(row["Name"], paste(analized_groups, collapse = "|"))
   })
   
+  df_filtrado <- df_filtrado[df_filtrado$Group %in% Groups_of_interest, ]
+  
   res <- aggregate(ddct ~ Group + Gene, data = df_filtrado, mean)
   res <- res%>% select (Gene, Group, ddct)
   
@@ -375,9 +378,11 @@ ddct_plot <- function(data,
   
   df_filtrado$Gene <- factor(df_filtrado$Gene, levels = Genes_of_interest)
   df_filtrado$Group <- factor(df_filtrado$Group, levels = Groups_of_interest)
+
+  res$Gene <- factor(res$Gene, levels = Genes_of_interest)
+  res$Group <- factor(res$Group, levels = Groups_of_interest)  
   
-  
-  plot <- ggplot(res, aes(x = Gene, y=ddct, fill=Group)) + 
+  plot <- ggplot(res, aes(x = Gene, y=ddct, fill=Group)) +
     
     geom_point(data = df_filtrado, aes(shape=Group, color=Group), size = 2, position = position_dodge(.6)) +
     scale_colour_grey(start = .2, end = .2) +
@@ -386,7 +391,7 @@ ddct_plot <- function(data,
     xlab("") +
     ylab("Relative mRNA levels") +
     
-    scale_y_continuous(expand = expansion(mult = c(0, .05))) +
+    scale_y_continuous(expand = expansion(mult = c(0, .15))) +
     
     geom_hline(yintercept=0) +
     
@@ -409,12 +414,36 @@ ddct_plot <- function(data,
       geom_errorbar(aes(ymin = ddct - sd, ymax = ddct + sd), 
                     position = position_dodge(.6), width = .2)
     
-    compare_means(ddct ~ Group, data = res, group.by="Gene", method = "t.test")
+    compare_means(ddct ~ Group, data = df_filtrado, group.by= "Gene", method = "anova")
     
-    plot <- plot + stat_compare_means(aes(x = Gene, y = ddct), data = res, 
-                                      method = "t.test", label = "p.signif")
+    
+    plot <- plot + geom_point(data = df_filtrado, aes(shape=Group), size = 2, position = position_dodge(.6))
+
+    
+    if (length(Groups_of_interest) > 2) {
+
+      plot <- plot + stat_compare_means(aes(x = Gene, y = ddct), data = df_filtrado,
+                                        method = "anova", vjust = -10, hjust = 1.2)      
+      plot <- plot + geom_pwc(
+        aes(x = Gene, y = ddct), data = df_filtrado, tip.length = .01,
+        method = "t.test", p.adjust.method = "bonferroni", label = "p.adj.format",
+        bracket.nudge.y = 0.02
+      )
+    } else {
+      
+      plot <- plot + geom_pwc(
+        aes(x = Gene, y = ddct), data = df_filtrado, tip.length = .01,
+        method = "t.test", label = "p.adj.format",
+        bracket.nudge.y = 0.02
+      )
+    }
+
+    
   }
   
+  if (length(Genes_of_interest) > 2) {
+    plot <- facet(plot, facet.by="Gene", scales="free")
+  }
   
   print(plot)
   
@@ -456,4 +485,148 @@ complete_ddct_analysis <- function() {
   return(Complete_list)
   
 }
+
+
+qPCR_experiments <- function(exp_paths, 
+                             exp_names, 
+                             Genes_of_interest, 
+                             title,
+                             result_path,
+                             Groups_of_interest,
+                             exp_name) {
+  
+  if (length(exp_paths) != length(exp_names)) {
+    stop("'exp_paths' and 'nombres_dataframes' must be the same length.")
+  }
+  
+  lista_dataframes <- lapply(exp_paths, function(archivo) {
+    read_excel(archivo)
+    
+  })
+  
+  names(lista_dataframes) <- exp_names
+  
+  lista_reducida <- lapply(lista_dataframes, function(df){
+    bind_rows(df, .id = "Gene")
+  })
+  
+  lista_completa_reducida <- bind_rows(lista_reducida, .id = "Exp")
+  
+  lista_total_reducida <- aggregate(ddct ~ Group + Gene + Exp, data = lista_completa_reducida, mean)
+  
+  lista_total_reducida <- lista_total_reducida%>% select (Exp, Gene, Group, ddct)
+  
+  sd <- aggregate(ddct ~ Group + Gene, data = lista_completa_reducida, FUN = "sd")
+  lista_total_reducida$sd <- sd$ddct
+  
+  
+  lista_final <- lista_total_reducida %>%
+    group_split(Gene) %>%
+    setNames(unique(lista_total_reducida$Gene))
+  
+  lista_final <- lapply(lista_final, function(df) {
+    dataframe <- as.data.frame(df)
+    return(dataframe)
+  })
+  
+  frecuencias <- table(lista_total_reducida$Gene, lista_total_reducida$Group)
+  
+  freq_values <- all(frecuencias >= 3)
+  
+  lista_total_reducida$Gene <- factor(lista_total_reducida$Gene, levels = Genes_of_interest)
+  lista_total_reducida$Group <- factor(lista_total_reducida$Group, levels = Groups_of_interest)
+  
+  lista_total_reducida <- na.omit(lista_total_reducida)
+  
+  lista_mean <- aggregate(ddct ~ Group + Gene, data = lista_total_reducida, mean)
+  
+  sd <- aggregate(ddct ~ Group + Gene, data = lista_total_reducida, FUN = "sd")
+  lista_mean$sd <- sd$ddct
+  
+  ###### PLOT #####
+  
+  plot <- ggplot(lista_mean, aes(x = Gene, y=ddct, fill=Group)) +
+    
+    geom_point(data = lista_total_reducida, aes(shape=Group, color=Group), size = 2, position = position_dodge(.6)) +
+    scale_colour_grey(start = .2, end = .2) +
+    
+    ggtitle(title) +
+    xlab("") +
+    ylab("Relative mRNA levels") +
+    
+    scale_y_continuous(expand = expansion(mult = c(0, .15))) +
+    
+    geom_hline(yintercept=0) +
+    
+    theme_bw() +
+    theme(plot.title = element_text(hjust = .5, vjust = 0.6, face = "bold", size = "20"),
+          panel.border = element_blank(),
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank(),
+          legend.title = element_blank(),
+          axis.title.y = element_text(face="bold"),
+          axis.line = element_line(colour = "black", linewidth = 1),
+          axis.text.x = element_text(face="bold", size=14, angle=45, 
+                                     vjust = 0.6, colour="Black"),
+          axis.text.y = element_text(colour = "black", face="bold", size=14))
+  
+  if (freq_values) {
+    plot <- plot + geom_bar(stat="identity", position = position_dodge(.6), 
+                            width = .5) +
+      scale_fill_grey(start = .1, end = .5) +
+      geom_errorbar(aes(ymin = ddct - sd, ymax = ddct + sd), 
+                    position = position_dodge(.6), width = .2)
+    
+    compare_means(ddct ~ Group, data = lista_total_reducida, group.by= "Gene", method = "anova")
+    
+    
+    plot <- plot + geom_point(data = lista_total_reducida, aes(shape=Group), size = 2, position = position_dodge(.6))
+    
+    
+    if (length(Groups_of_interest) > 2) {
+      
+      plot <- plot + stat_compare_means(aes(x = Gene, y = ddct), data = lista_total_reducida,
+                                        method = "anova", vjust = -10, hjust = 1.2)      
+      plot <- plot + geom_pwc(
+        aes(x = Gene, y = ddct), data = lista_total_reducida, tip.length = .01,
+        method = "t.test", p.adjust.method = "bonferroni", label = "p.adj.format",
+        bracket.nudge.y = 0.02
+      )
+    } else {
+      
+      plot <- plot + geom_pwc(
+        aes(x = Gene, y = ddct), data = lista_total_reducida, tip.length = .01,
+        method = "t.test", label = "p.adj.format",
+        bracket.nudge.y = 0.02
+      )
+    }
+    
+    
+  }
+  
+  if (length(Genes_of_interest) > 2) {
+    plot <- facet(plot, facet.by="Gene", scales="free")
+  }
+  
+  ggsave(file = paste0(result_path, "/", exp_name, "_ddct_Experiments_plot.pdf"),
+         plot= last_plot(),
+         device = pdf,
+         path=result_path)          
+  
+  hs <- createStyle(textDecoration = "BOLD", fontColour = "white", fontSize = 14, 
+                    fontName = "Arial Narrow", fgFill = "turquoise4")
+  
+  write.xlsx(x = final, 
+             file = paste0(result_path, "/", exp_name, "_qPCR_ddct_Experiments.xlsx"),
+             headerStyle = hs,
+             rowNames = FALSE)
+  
+  return(lista_final)
+  
+}
+
+
+
+
+
 
