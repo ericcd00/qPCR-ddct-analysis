@@ -44,14 +44,14 @@ housekeeping_genes = c("HPRT1")
 
 # Number of wells used for each gene
 # wells = number of wells (15)
-wells = 18
+wells = 20
 
 # Names of all the conditions ("Groups") of the analysis
 # If one group contains another ("SPP1" and "SPP12") put the longest one first.
 # If there are special characters in a group ("SPP1+EPZ) put "\\" before the 
 # special character ("SPP1\\+EPZ")
 # analized_groups = c("UNT", "CAF", "...",...)
-analized_groups = c("UNT", "CAF") #Hacer pruebas con "\\"
+analized_groups = c("CT", "KO1", "KO3") #Hacer pruebas con "\\"
 
 # (Only needed if you *won't*  use the read_pdf function)
 # qPCR excel file
@@ -63,28 +63,30 @@ Excel_path = "~/Downloads/qPCR_data/Results/2023-01-20_qPCR_data.xlsx"
 # pdf_path <- "path_of_the_file"
 pdf_path <- "~/Downloads/qPCR_data/2023-10-10 Laura S_EXAMPLE2.PDF"
 
-
 # (Only needed if you will use the ddct_analysis function)
 # Variable used as the control variable for the ddct analysis 
 # control_variable = "UNT"
-control_variable = "UNT"
-
+control_variable = "CT"
 
 # (Only needed if you will use the ddct_plot function)
 # Genes wanted to be plotted 
 # Genes_of_interest = c("NNMT1", "SERPINE1", "SNAI2", "THBS1")
-Genes_of_interest = c("MRAS", "TUBB6")
+Genes_of_interest = c("ACTB", "MRAS")
 
 # Names of all the conditions ("Groups") to plot
 # Groups_of_interest = c("UNT", "CAF", "...",...)
-Groups_of_interest = c("UNT", "CAF")
+Groups_of_interest = c("CT", "KO1", "KO3")
 
+# Test to perform if there are 3 or more groups to compare ("anova" or "kruskal.test")
+GroupTest = "kruskal.test"
+
+# Test to perform between groups ("t.test" or "wilcox.test")
+PairsTest = "t.test"
 
 # (Only needed if you will use the ddct_plot function)
 # Title of the plot generated
 # title = "Title"
 title = "ddct results"
-
 
 # (Only needed if you will use the qPCR_experiments function)
 # List of all the experiments to mix
@@ -169,9 +171,6 @@ Results <- read_pdf(pdf_path = pdf_path,
 Results <- read_excel(Excel_path = Excel_path)
 
 
-# From Excel to a HT-qPCR object
-
-
 # Perform a ddct analysis of the file
 ddct_results <- ddct_analysis(data = Results,
                               result_path = result_path, 
@@ -186,9 +185,12 @@ plot_result <- ddct_plot(data = Results,
                       title = title,
                       result_path = result_path,
                       Groups_of_interest = Groups_of_interest,
+                      analized_groups = analized_groups,
+                      GroupTest = GroupTest,
+                      PairsTest = PairedTest,
                       exp_name = exp_name)
 
-# Perform all functions at one from the pdf file 
+# Perform the read_pdf, ddct_analysis and ddct_plot functions at one from the pdf file 
 complete_ddct_analysis <- complete_ddct_analysis()
 
 # Join multiple experiments and plot them

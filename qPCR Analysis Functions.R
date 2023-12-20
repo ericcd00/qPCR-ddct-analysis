@@ -326,6 +326,9 @@ ddct_plot <- function(data,
                       title,
                       result_path,
                       Groups_of_interest,
+                      analized_groups,
+                      GroupTest,
+                      PairsTest,
                       exp_name) {
   
   ################################################################################
@@ -356,7 +359,7 @@ ddct_plot <- function(data,
   #################################### Code ######################################
   ################################################################################
   
-  df_combined <- bind_rows(ddct_results, .id = "Gene")
+  df_combined <- bind_rows(ddct_values, .id = "Gene")
   df_filtrado <- df_combined %>% filter(Gene %in% Genes_of_interest)
   
   df_filtrado$Group <- apply(df_filtrado, 1, function(row) {
@@ -421,28 +424,27 @@ ddct_plot <- function(data,
 
     
     if (length(Groups_of_interest) > 2) {
-
+      
       plot <- plot + stat_compare_means(aes(x = Gene, y = ddct), data = df_filtrado,
-                                        method = "anova", vjust = -10, hjust = 1.2)      
+                                        method = GroupTest, vjust = -12, hjust = 0.5)      
       plot <- plot + geom_pwc(
         aes(x = Gene, y = ddct), data = df_filtrado, tip.length = .01,
-        method = "t.test", p.adjust.method = "bonferroni", label = "p.adj.format",
+        method = PairsTest, p.adjust.method = "BH", label = "p.adj.format",
         bracket.nudge.y = 0.02
       )
+      
+      plot <- facet(plot, facet.by="Gene", scales="free")
+      
     } else {
       
       plot <- plot + geom_pwc(
         aes(x = Gene, y = ddct), data = df_filtrado, tip.length = .01,
-        method = "t.test", label = "p.adj.format",
+        method = PairsTest, label = "p.adj.format",
         bracket.nudge.y = 0.02
       )
     }
 
     
-  }
-  
-  if (length(Genes_of_interest) > 2) {
-    plot <- facet(plot, facet.by="Gene", scales="free")
   }
   
   print(plot)
@@ -460,7 +462,7 @@ complete_ddct_analysis <- function() {
   
   Results <- read_pdf(pdf_path = pdf_path, 
                       result_path = result_path, 
-                      exp_name= exp_name, 
+                      exp_name = exp_name, 
                       wells = wells, 
                       analized_groups = analized_groups, 
                       housekeeping_genes = housekeeping_genes)
@@ -471,11 +473,16 @@ complete_ddct_analysis <- function() {
                                 housekeeping_genes = housekeeping_genes,
                                 control_variable = control_variable)
   
-  plotting <- ddct_plot(data = Results,
-                        ddct_values = ddct_results,
-                        Genes_of_interest = Genes_of_interest,
-                        title = title,
-                        result_path = result_path)
+  plot_result <- ddct_plot(data = Results,
+                           ddct_values = ddct_results,
+                           Genes_of_interest = Genes_of_interest,
+                           title = title,
+                           result_path = result_path,
+                           Groups_of_interest = Groups_of_interest,
+                           analized_groups = analized_groups,
+                           GroupTest = GroupTest,
+                           PairsTest = PairsTest,
+                           exp_name = exp_name)
   
   Complete_list <- list(Results,
                         ddct_results)
